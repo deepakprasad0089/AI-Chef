@@ -246,7 +246,25 @@ Requirements:
             ),
         )
         parsed = extract_json(response.text or "")
-        steps = parsed.get("steps") if isinstance(parsed, dict) else None
+        if not isinstance(parsed, dict):
+            raise ValueError("The AI returned an invalid recipe revision.")
+
+        updated_title = parsed.get("title")
+        updated_description = parsed.get("description")
+        steps = parsed.get("steps")
+
+        if (
+            not isinstance(updated_title, str)
+            or not updated_title.strip()
+            or len(updated_title) > 120
+        ):
+            raise ValueError("The AI returned an invalid recipe title.")
+
+        if (
+            not isinstance(updated_description, str)
+            or len(updated_description) > 240
+        ):
+            raise ValueError("The AI returned an invalid recipe description.")
 
         if not isinstance(steps, list) or not 1 <= len(steps) <= 15:
             raise ValueError("The AI returned an invalid list of cooking steps.")
@@ -281,6 +299,8 @@ Requirements:
 
         updated_recipe = {
             **recipe,
+            "title": updated_title.strip(),
+            "description": updated_description.strip(),
             "ingredients": [
                 {
                     **item,
