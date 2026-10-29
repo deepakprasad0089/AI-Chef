@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChefHat, Sparkles, Clock3, Users, Plus, Minus, ArrowLeftRight,
   Check, AlertCircle, RefreshCw, Utensils, Leaf, CookingPot
@@ -40,10 +40,18 @@ function normalizeRecipe(data) {
     if (!Number.isFinite(quantity) || quantity < 0) {
       throw new Error(`The quantity for ${item.name} is invalid. Please try again.`);
     }
-    const substitutions = Array.isArray(item.substitutions)
-      ? item.substitutions.filter(s => s && typeof s.name === "string" && s.name.trim())
-        .map((s, i) => ({ id: `${index}-swap-${i}`, name: s.name, reason: typeof s.reason === "string" ? s.reason : "" }))
-      : [];
+    
+const substitutions = Array.isArray(item.substitutions)
+  ? item.substitutions
+      .filter(s => s && typeof s.name === "string" && s.name.trim())
+      .map((s, i) => ({
+        id: `${index}-swap-${i}`,
+        name: s.name,
+        reason: typeof s.reason === "string" ? s.reason : "",
+        replacement: s.replacement === true
+      }))
+  : [];
+
     return {
       id: String(item.id || `ingredient-${index}`),
       name: item.name,
@@ -87,25 +95,55 @@ function IngredientRow({ ingredient, quantity, onSwap }) {
   );
 }
 
-function SwapDialog({ ingredient, onClose, onApply }) {
+function SwapDialog({ ingredient, onClose, onApply, loading }) {
   const [selected, setSelected] = useState(ingredient?.substitutions?.[0]?.id || "");
+
+  // Reset the selected option whenever the user opens a different ingredient.
+  useEffect(() => {
+    setSelected(ingredient?.substitutions?.[0]?.id || "");
+  }, [ingredient?.id, ingredient?.substitutions]);
+
   if (!ingredient) return null;
-  const option = ingredient.substitutions.find(s => s.id === selected);
+  const option = ingredient.substitutions.find(item => item.id === selected);
+
+  async function handleApply() {
+    if (!option || loading) return;
+    const success = await onApply(ingredient.id, option);
+    if (success) onClose();
+  }
+
+  function handleClose() {
+    if (!loading) onClose();
+  }
+
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onMouseDown={event => {
+        if (event.target === event.currentTarget) handleClose();
+      }}
+    >
       <section className="swap-dialog" role="dialog" aria-modal="true" aria-labelledby="swap-title">
         <div className="dialog-top">
           <div>
             <p className="eyebrow">INGREDIENT SWAP</p>
             <h3 id="swap-title">Replace {ingredient.name}</h3>
           </div>
-          <button className="icon-button" aria-label="Close" onClick={onClose}>×</button>
+          <button className="icon-button" aria-label="Close" onClick={handleClose} disabled={loading}>×</button>
         </div>
         <p className="muted">Choose an alternative suggested for this recipe.</p>
         <div className="swap-options">
           {ingredient.substitutions.map(item => (
             <label className={`swap-option ${selected === item.id ? "selected" : ""}`} key={item.id}>
-              <input type="radio" name="substitution" value={item.id} checked={selected === item.id} onChange={() => setSelected(item.id)} />
+              <input
+                type="radio"
+                name="substitution"
+                value={item.id}
+                checked={selected === item.id}
+                disabled={loading}
+                onChange={() => setSelected(item.id)}
+              />
               <span className="swap-option-copy">
                 <strong>{item.name}</strong>
                 {item.reason && <small>{item.reason}</small>}
@@ -114,8 +152,10 @@ function SwapDialog({ ingredient, onClose, onApply }) {
           ))}
         </div>
         <div className="dialog-actions">
-          <button className="button button-secondary" onClick={onClose}>Cancel</button>
-          <button className="button button-primary" disabled={!option} onClick={() => { onApply(ingredient.id, option); onClose(); }}>Apply swap</button>
+          <button className="button button-secondary" onClick={handleClose} disabled={loading}>Cancel</button>
+          <button className="button button-primary" disabled={!option || loading} onClick={handleApply}>
+            {loading ? "Updating recipe..." : "Apply swap"}
+          </button>
         </div>
       </section>
     </div>
@@ -208,9 +248,75 @@ export default function App() {
       : [...current, id]);
   }
 
-  function applySwap(id, option) {
-    setSwaps(current => ({ ...current, [id]: option }));
+  
+
+async function applySwap(id, option) {
+    setError("");
+    setStatusMessage("");
+
+    if (!recipe || !option?.name) {
+      setError("Invalid substitution. Please try again.");
+      return false;
+    }
+
+    // Direct substitution: update the displayed ingredient without regenerating steps.
+    if (!option.replacement) {
+      setSwaps(current => ({ ...current, [id]: option }));
+      setStatusMessage(`Ingredient replaced with ${option.name}.`);
+      return true;
+    }
+
+    try {
+      setLoading(true);
+
+      // Include earlier display-only swaps in the recipe sent to the backend,
+      // so a later AI revision doesn't silently discard them.
+      const recipeWithExistingSwaps = {
+        ...recipe,
+        ingredients: recipe.ingredients.map(item => {
+          const previousSwap = swaps[item.id];
+          return previousSwap ? { ...item, name: previousSwap.name } : item;
+        }),
+      };
+
+      const response = await fetch(`${API_URL}/api/substitute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipe: recipeWithExistingSwaps,
+          ingredient_id: id,
+          replacement_name: option.name,
+        }),
+      });
+
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(body?.detail || "Could not update the cooking instructions.");
+      }
+      if (!body?.recipe) {
+        throw new Error("The updated recipe was missing from the response.");
+      }
+
+      const updatedRecipe = normalizeRecipe(body.recipe);
+      setRecipe(updatedRecipe);
+
+      // Keep the current serving count and completed steps that still exist.
+      setCompletedSteps(current =>
+        current.filter(stepId => updatedRecipe.steps.some(step => step.id === stepId))
+      );
+
+      // Existing simple swaps are now included in the revised recipe itself.
+      setSwaps({});
+      setStatusMessage(`Recipe updated with ${option.name}.`);
+      return true;
+    } catch (err) {
+      setError(err.message || "Substitution failed. Your original recipe is unchanged.");
+      return false;
+    } finally {
+      setLoading(false);
+    }
   }
+
 
   return (
     <div className="app-shell">
@@ -254,7 +360,7 @@ export default function App() {
             <div className="form-bottom">
               <span className="helper-text">Separate ingredients with commas.</span>
               <button className="button button-primary generate-button" type="submit" disabled={loading}>
-                {loading ? <><span className="spinner" /> Creating recipe…</> : <><Sparkles size={17} /> Generate recipe</>}
+                {loading ? <><span className="spinner" /> Creating recipe…</> : <> Generate recipe</>}
               </button>
             </div>
           </form>
@@ -358,10 +464,11 @@ export default function App() {
         <footer className="site-footer">Made for everyday cooking <span>•</span> PantryPilot AI</footer>
       </main>
       <SwapDialog
-        ingredient={swapIngredient}
-        onClose={() => setSwapIngredient(null)}
-        onApply={applySwap}
-      />
+  ingredient={swapIngredient}
+  onClose={() => setSwapIngredient(null)}
+  onApply={applySwap}
+  loading={loading}
+/>
     </div>
   );
 }
