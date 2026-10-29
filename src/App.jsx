@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from "react";
 import {
   ChefHat, Sparkles, Clock3, Users, Plus, Minus, ArrowLeftRight,
-  Check, AlertCircle, RefreshCw, Utensils, Leaf
+  Check, AlertCircle, RefreshCw, Utensils, Leaf, CookingPot
 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -217,18 +217,18 @@ export default function App() {
       <div className="background-shape shape-one" />
       <div className="background-shape shape-two" />
       <header className="site-header page-width">
-        <a className="brand" href="#" aria-label="AIChef home">
+        <a className="brand" href="#" aria-label="PantryPilot home">
           <span className="brand-icon"><ChefHat size={23} strokeWidth={2.6} /></span>
-          <span>AIChef</span>
+          <span>PantryPilot</span>
         </a>
-        <span className="header-tagline">A little inspiration for your fridge</span>
+        {/* <span className="header-tagline">A little inspiration for your fridge</span> */}
       </header>
 
       <main className="page-width">
         <section className="hero">
           <div className="hero-copy">
-            <p className="eyebrow"><Sparkles size={15} /> YOUR EVERYDAY RECIPE HELPER</p>
-            <h1>Cook with what<br className="desktop-break" /> you have.</h1>
+            <p className="eyebrow"> YOUR EVERYDAY RECIPE HELPER</p>
+            <h1>Cook with what you have.</h1>
             <p className="hero-subtitle">Turn your ingredients into something delicious.</p>
           </div>
           <div className="hero-art" aria-hidden="true">
@@ -283,87 +283,79 @@ export default function App() {
         )}
 
         {loading && (
-          <section className="loading-card" aria-live="polite">
-            <div className="loading-art"><Sparkles size={24} /></div>
-            <div className="skeleton skeleton-title" />
-            <div className="skeleton skeleton-line" />
-            <div className="skeleton skeleton-line short" />
-            <p>Finding a recipe that fits your ingredients…</p>
-          </section>
+        <section className="loading-card" aria-live="polite">
+  <div className="boiling-pot">
+    <span className="steam steam-one" />
+    <span className="steam steam-two" />
+    <CookingPot size={64} strokeWidth={1.5} />
+  </div>
+
+  <h2>Cooking up something delicious</h2>
+  <p>Finding the right recipe for your ingredients…</p>
+</section>
         )}
 
         {recipe && !loading && (
-          <section className="recipe-section" aria-label="Generated recipe">
-            <div className="recipe-heading">
-              <div>
-                <p className="eyebrow">YOUR RECIPE</p>
-                <h2>{recipe.title}</h2>
-                <p className="recipe-description">{recipe.description}</p>
+          <section className="recipe-workspace" aria-label="Generated recipe">
+            <aside className="content-card ingredients-card workspace-ingredients">
+              <div className="section-heading">
+                <div><span className="section-icon"><Leaf size={18} /></span><h3>Ingredients</h3></div>
+                <span className="section-caption">{recipe.ingredients.length} items</span>
               </div>
-              <span className="difficulty-pill">{recipe.difficulty}</span>
-            </div>
+              <div className="serving-control">
+                <span>Servings</span>
+                <div className="stepper">
+                  <button className="stepper-button" aria-label="Decrease servings" onClick={() => setServings(s => Math.max(1, s - 1))} disabled={servings <= 1}><Minus size={15} /></button>
+                  <strong>{servings}</strong>
+                  <button className="stepper-button stepper-plus" aria-label="Increase servings" onClick={() => setServings(s => Math.min(12, s + 1))} disabled={servings >= 12}><Plus size={15} /></button>
+                </div>
+              </div>
+              <div className="ingredient-list">
+                {visibleIngredients.map(item => (
+                  <IngredientRow key={item.id} ingredient={{ ...item, name: item.displayedName }} quantity={item.displayedQuantity} onSwap={() => setSwapIngredient(item)} />
+                ))}
+              </div>
+              {Object.keys(swaps).length > 0 && <button className="text-button undo-button" onClick={() => setSwaps({})}>Reset ingredient swaps</button>}
+            </aside>
 
-            <div className="recipe-meta">
-              <span><Clock3 size={17} /><strong>{recipe.prep_minutes + recipe.cook_minutes || "—"} min</strong><small>total time</small></span>
-              <span><Users size={17} /><strong>{servings}</strong><small>{servings === 1 ? "serving" : "servings"}</small></span>
-              <span><Utensils size={17} /><strong>{recipe.ingredients.length}</strong><small>ingredients</small></span>
-            </div>
-
-            <div className="recipe-grid">
-              <section className="content-card ingredients-card">
-                <div className="section-heading">
-                  <div><span className="section-icon"><Leaf size={18} /></span><h3>Ingredients</h3></div>
-                  <span className="section-caption">Scale servings</span>
+            <div className="workspace-main">
+              <section className="recipe-cover">
+                <img src="/food.jpg" alt="A freshly prepared meal" />
+                <div className="recipe-cover-shade" />
+                <div className="cover-topline"><span>PANTRYPILOT RECIPE</span><span className="difficulty-pill">{recipe.difficulty}</span></div>
+                <div className="cover-copy">
+                  <p className="eyebrow">MADE WITH WHAT YOU HAVE</p>
+                  <h2>{recipe.title}</h2>
+                  <p>{recipe.description}</p>
                 </div>
-                <div className="serving-control">
-                  <span>Servings</span>
-                  <div className="stepper">
-                    <button className="stepper-button" aria-label="Decrease servings" onClick={() => setServings(s => Math.max(1, s - 1))} disabled={servings <= 1}><Minus size={15} /></button>
-                    <strong>{servings}</strong>
-                    <button className="stepper-button stepper-plus" aria-label="Increase servings" onClick={() => setServings(s => Math.min(12, s + 1))} disabled={servings >= 12}><Plus size={15} /></button>
-                  </div>
+                <div className="cover-meta">
+                  <span><Clock3 size={16} /><strong>{recipe.prep_minutes + recipe.cook_minutes || "—"} min</strong><small>Total time</small></span>
+                  <span><Users size={16} /><strong>{servings}</strong><small>{servings === 1 ? "Serving" : "Servings"}</small></span>
                 </div>
-                <div className="ingredient-list">
-                  {visibleIngredients.map(item => (
-                    <IngredientRow
-                      key={item.id}
-                      ingredient={{ ...item, name: item.displayedName }}
-                      quantity={item.displayedQuantity}
-                      onSwap={() => setSwapIngredient(item)}
-                    />
-                  ))}
-                </div>
-                {Object.keys(swaps).length > 0 && (
-                  <button className="text-button undo-button" onClick={() => setSwaps({})}>Reset ingredient swaps</button>
-                )}
               </section>
 
-              <section className="content-card steps-card">
+              <section className="content-card steps-card workspace-directions">
                 <div className="section-heading">
-                  <div><span className="section-icon"><Check size={18} /></span><h3>Cooking steps</h3></div>
-                  <span className="progress-count">{completedCount}/{recipe.steps.length}</span>
+                  <div><span className="section-icon"><Check size={18} /></span><h3>Directions</h3></div>
+                  <span className="progress-count">{completedCount}/{recipe.steps.length} done</span>
                 </div>
                 <div className="progress-track" aria-label={`${progress}% complete`}><div className="progress-fill" style={{ width: `${progress}%` }} /></div>
                 <div className="steps-list">
                   {recipe.steps.map((step, index) => {
                     const checked = completedSteps.includes(step.id);
-                    return (
-                      <label className={`step-row ${checked ? "is-complete" : ""}`} key={step.id}>
-                        <span className="step-number">{checked ? <Check size={17} /> : index + 1}</span>
-                        <span className="step-text">{step.instruction}</span>
-                        <input type="checkbox" checked={checked} onChange={() => toggleStep(step.id)} aria-label={`Mark step ${index + 1} complete`} />
-                      </label>
-                    );
+                    return <label className={`step-row ${checked ? "is-complete" : ""}`} key={step.id}>
+                      <span className="step-number">{checked ? <Check size={17} /> : index + 1}</span>
+                      <span className="step-text">{step.instruction}</span>
+                      <input type="checkbox" checked={checked} onChange={() => toggleStep(step.id)} aria-label={`Mark step ${index + 1} complete`} />
+                    </label>;
                   })}
                 </div>
-                {completedCount === recipe.steps.length && (
-                  <div className="all-done"><Check size={17} /> All done — enjoy your meal!</div>
-                )}
+                {completedCount === recipe.steps.length && <div className="all-done"><Check size={17} /> All done — enjoy your meal!</div>}
               </section>
             </div>
           </section>
         )}
-        <footer className="site-footer">Made for everyday cooking <span>•</span> AIChef AI</footer>
+        <footer className="site-footer">Made for everyday cooking <span>•</span> PantryPilot AI</footer>
       </main>
       <SwapDialog
         ingredient={swapIngredient}
