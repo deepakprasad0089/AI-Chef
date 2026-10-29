@@ -191,7 +191,7 @@ AI assistance was also used during development to refine prompts, review impleme
 
 ## Time spent
 
-**Development time: approximately 4 hours.** 
+**Development time: approximately 5 hours.** 
 
 ## Future improvements
 
